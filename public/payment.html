@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DOCVERA Payment Demo</title>
+    <style>
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        margin: 24px;
+      }
+      .row {
+        margin: 12px 0;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      input {
+        width: 520px;
+        max-width: 100%;
+        padding: 10px;
+        font-size: 14px;
+      }
+      button {
+        padding: 10px 16px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      #status {
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        white-space: pre-wrap;
+      }
+      .error {
+        color: #b00020;
+      }
+    </style>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  </head>
+  <body>
+    <h2>DOCVERA Payment</h2>
+
+    <div class="row">
+      <label>JWT Token (Authorization: Bearer ...)</label>
+      <input id="token" placeholder="Paste your JWT token here" />
+    </div>
+
+    <div class="row">
+      <label>Service ID (for creating a DOCVERA order)</label>
+      <input id="serviceId" placeholder="MongoDB Service _id" />
+    </div>
+
+    <div class="row">
+      <label>Amount to charge (as expected by backend) - default: 50000</label>
+      <input id="amount" value="50000" />
+    </div>
+
+    <div class="row">
+      <button id="payBtn">Pay with Razorpay</button>
+    </div>
+
+    <div id="status">Ready</div>
+
+    <script>
+      function setStatus(message, isError) {
+        const el = document.getElementById('status');
+        el.textContent = message;
+        el.className = isError ? 'error' : '';
+      }
+
+      function authHeaders(token) {
+        return {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        };
+      }
+
+      async function getConfig() {
+        const res = await fetch('/api/payment/config');
+        if (!res.ok) throw new Error('Failed to load Razorpay config');
+        return res.json();
+      }
+
+      async function createDocveraOrder(token, serviceId) {
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: authHeaders(token),
+          body: JSON.stringify({ serviceId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || 'Failed to create order');
+        // Controller returns formatOrder(order) without __v; uses orderId and price.
+        if (!data || !data.orderId) throw new Error('Order response missing orderId');
+        return data;
+      }
+
+      async function createRazorpayOrder(token, amount) {
+        const res = await fetch('/api/payment/create-order', {
+          method: 'POST',
+          headers: authHeaders(token),
+          body: JSON.stringify({ amount: amount }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || data.details || 'Failed to create Razorpay order');
+        return data;
+      }
+
+      async function verifyPayment(token, payload) {
+        const res = await fetch('/api/payment/verify', {
+          method: 'POST',
+          headers: authHeaders(token),
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || data.details || 'Payment verification failed');
+        return data;
+      }
+
+      document.getElementById('payBtn').addEventListener('click', async () => {
+        try {
+          const token = document.getElementById('token').value.trim();
+          const serviceId = document.getElementById('serviceId').value.trim();
+          const amount = document.getElementById('amount').value;
+
+          if (!token) return setStatus('Please paste JWT token', true);
+          if (!serviceId) return setStatus('Please enter serviceId', true);
+          if (!amount) return setStatus('Please enter amount', true);
+
+          setStatus('Creating DOCVERA order...');
+          const docveraOrder = await createDocveraOrder(token, serviceId);
+          const mongoOrderId = docveraOrder.orderId;
+
+          // Use amount input (default 50000) as Razorpay amount as backend expects.
+          const chargeAmount = Number(amount);
+          setStatus('Creating Razorpay order...');
+          const razorpayOrder = await createRazorpayOrder(token, chargeAmount);
+
+          const { keyId } = await getConfig();
+
+          setStatus('Opening Razorpay Checkout...');
+
+          const rzp = new Razorpay({
+            key: keyId,
+            amount: razorpayOrder.amount,
+            currency: 'INR',
+            order_id: razorpayOrder.orderId,
+            handler: async function (response) {
+              try {
+                setStatus('Verifying payment on backend...');
+                const verifyPayload = {
+                  orderId: mongoOrderId, // IMPORTANT: MongoDB order id
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                };
+
+                const out = await verifyPayment(token, verifyPayload);
+                setStatus('Payment verified successfully.\\n' + JSON.stringify(out.order || out, null, 2));
+              } catch (e) {
+                setStatus(String(e.message || e), true);
+              }
+            },
+            modal: {
+              ondismiss: function () {
+                // Optional: could set a message
+              },
+            },
+          });
+
+          rzp.on('payment.failed', function (failure) {
+            setStatus(
+              'Payment failed.\\n' +
+                (failure && failure.error && failure.error.description
+                  ? failure.error.description
+                  : 'Unknown error'),
+              true
+            );
+          });
+
+          rzp.open();
+        } catch (e) {
+          setStatus(String(e.message || e), true);
+        }
+      });
+    </script>
+  </body>
+</html>
+

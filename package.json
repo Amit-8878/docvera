@@ -1,0 +1,55 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "pm2:cluster": "pm2 start server.js -i max --name docvera-api",
+    "pm2:ecosystem": "pm2 start ../ecosystem.config.cjs",
+    "make-admin": "node scripts/makeAdmin.js",
+    "seed-services": "node scripts/seedDemoServices.js",
+    "worker:payments": "node workers/paymentWorker.js",
+    "worker:orders": "node workers/orderJobsWorker.js",
+    "worker": "node queue/worker.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@socket.io/redis-adapter": "^8.3.0",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.73.0",
+    "cloudinary": "^2.9.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "express-async-errors": "^3.1.1",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.10.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.3.2",
+    "morgan": "^1.10.1",
+    "multer": "^1.4.5-lts.1",
+    "node-cache": "^5.1.2",
+    "nodemailer": "^8.0.4",
+    "otp-generator": "^4.0.1",
+    "pdfkit": "^0.18.0",
+    "puppeteer": "^24.40.0",
+    "razorpay": "^2.9.6",
+    "redis": "^4.7.1",
+    "socket.io": "^4.8.3",
+    "validator": "^13.15.26",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7",
+    "pm2": "^5.4.3"
+  }
+}
