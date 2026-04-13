@@ -8,6 +8,10 @@ async function seedTempAdminUser() {
   try {
     const email = 'admin@gmail.com'
     const password = 'admin123'
+    const name = 'Admin'
+
+    // Prevent undefined/empty required values before any save/create call.
+    if (!email || !password || !name) return false
 
     const hashed = await bcrypt.hash(password, 10)
 
@@ -15,12 +19,14 @@ async function seedTempAdminUser() {
 
     if (!user) {
       await User.create({
+        name,
         email,
         password: hashed,
         role: 'admin'
       })
       console.log('[tempAdmin] Created admin:', email)
     } else {
+      user.name = user.name || name
       user.password = hashed
       user.role = 'admin'
       await user.save()
