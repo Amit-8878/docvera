@@ -365,6 +365,10 @@ async function login(req, res, next) {
   try {
     const { email, password } = req.body || {};
     const ip = clientIp(req);
+    // Debug request payload exactly as received by backend.
+    // NOTE: This logs plaintext password and should be removed after troubleshooting.
+    // eslint-disable-next-line no-console
+    console.log('[auth/login] request body:', { email, password });
 
     if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
       return res.status(400).json({
